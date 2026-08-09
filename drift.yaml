@@ -1,0 +1,142 @@
+# Built-in ACP session-update rendering templates.
+#
+# Each top-level key is a sessionUpdate discriminator (the 'kind' produced
+# by flattenAcpNotification); each value is a template4d template (a
+# practical subset of Go's text/template syntax) rendered against that
+# notification's flattened view map. Field access uses the leading-dot
+# form (e.g. {{.text}}), and section-conditionals from the old Mustache
+# templates map onto {{if .flag}}...{{end}} / {{range .list}}...{{end}}.
+#
+# Mirrors drift's own native terminal chat renderer
+# (drift/crates/drift/src/chat_render.rs): the same icon/wording
+# conventions (💭 thinking, ✅/❌/⏳ tool status, 📊 usage), just emitted as
+# Markdown instead of ANSI color codes. Tool calls additionally carry a
+# kind icon (📖 read, ✏️ edit, ⚡ execute, …) so the message stream reads
+# like drift's own progress display.
+agent_message_chunk: |
+  {{.text}}
+
+user_message_chunk: |+
+  [User] {{.text}}
+
+agent_thought_chunk: |+
+  {{- if .hasText -}}
+  
+  💭 *thinking: {{.text}}*
+  {{- end -}}
+
+tool_call: |+
+  
+  {{.kindIcon}} running **{{.title}}**
+
+  {{ if .hasContentText }}
+  {{.contentText}}
+  {{ else if .hasInput }}
+  ```json
+  {{.inputJson}}
+  ```
+  {{ end }}
+
+tool_call_update: |+
+  {{- if .completed -}}
+  ✅ {{.label}}{{end}}{{if .failed}}❌ {{.label}}
+  {{- end -}}
+  {{- if .inProgress -}}
+  ⏳ {{.label}} (in progress)
+  {{- end -}}
+
+plan: |+
+  {{- if .hasEntries -}}
+  
+  **Plan**
+    {{- range .entries -}}
+    {{.statusIcon}} {{.index}}. {{.content}}{{- if .hasPriority -}} ({{.priority}}){{- end -}}
+    {{- end -}}
+  
+  {{- end -}}
+
+plan_update: |+
+  {{- if .hasEntries -}}
+  
+  **Plan updated**
+    {{range .entries}}
+  
+    {{.statusIcon}} {{.index}}. {{.content}}
+    {{- end -}}
+  {{- end -}}
+  {{- if .hasMarkdown -}}
+  
+  **Plan**
+  
+  {{.markdown}}
+  {{- end -}}
+  {{- if .hasUri -}}
+  
+  📎 Plan: {{.uri}}
+  {{- end -}}
+
+plan_removed: |+
+  {{- if .hasPlanId -}}
+  🗑️ Plan removed ({{.planId}})
+  {{- end -}}
+
+available_commands_update: |+
+  {{- if .hasCommands -}}
+  
+  📋 {{.commandCount}} command(s) available:
+    {{- range .commands -}}
+  - `{{.name}}` {{- if .hasDescription -}} — {{.description}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+config_option_update: |+
+  {{- if .hasConfigOptions -}}
+  ⚙️ Config options:
+    {{- range .configOptions -}}
+  - `{{.name}}` = {{.value}}{{- if .hasDescription -}} ({{.description}}){{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+session_info_update: |+
+  {{- if .hasTitle -}}
+  🏷️ Session: {{.title}}
+  {{- end -}}
+  {{- if .hasUpdatedAt -}}
+  🕒 updated {{.updatedAt}}
+  {{- end -}}
+
+usage_update: |+
+  
+  📊 {{.inputHuman}} in · {{.outputHuman}} out | cache +{{.cacheNewHuman}} new · {{.cacheReadHuman}} hit | {{.usedHuman}}/{{.sizeHuman}} ctx{{if .hasPct}} ({{.pct}}%){{end}}
+
+current_mode_update: |+
+  
+  🔀 Mode: **{{.currentModeId}}**
+
+permission_request: |+
+  
+  
+  🔐 **Permission requested**
+  {{- if .hasTitle -}}
+  : {{.kindIcon}} {{.title}}
+
+  {{- end -}}
+  {{ if .hasInput }}
+
+  ```json
+  {{.inputJson}}
+  ```
+
+  {{ end }}
+  {{ if .hasOptions }}
+
+  Options:
+    {{ range .options }} **{{.index}}**. {{.name}}{{ end }}
+  
+  {{ end }}
+
+# Deliberately no 'unknown' key: AcpRenderEngine's fallback chain (flattened
+# text, then a raw JSON dump) only kicks in when a kind is NOT a key in this
+# map. Mapping 'unknown' to "" here would silently swallow every malformed
+# notification instead of showing the raw-JSON fallback — the opposite of
+# the "messages are always displayed" guarantee this engine provides.

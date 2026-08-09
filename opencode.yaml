@@ -1,0 +1,26 @@
+# Built-in ACP session-update rendering templates.
+#
+# Each top-level key is a sessionUpdate discriminator (the 'kind' produced
+# by flattenAcpNotification); each value is a template4d template (a
+# practical subset of Go's text/template syntax) rendered against that
+# notification's flattened view map. Field access uses the leading-dot
+# form (e.g. {{.text}}), and section-conditionals from the old Mustache
+# templates map onto {{if .flag}}...{{end}} / {{range .list}}...{{end}}.
+#
+# Currently a verbatim copy of default.yaml; bespoke opencode rendering is
+# refined in a later batch.
+agent_message_chunk: "{{.text}}"
+user_message_chunk: "[User] {{.text}}"
+agent_thought_chunk: "\n>{{.text}}"
+tool_call: "\n\n[Tool: **{{.title}}**]\n{{if .hasContentText}}\n\n{{.contentText}}\n{{else if .hasInput}}\n\n{{.inputJson}}\n{{end}}"
+tool_call_update: "{{.contentText}}"
+plan: "{{if .hasEntries}}\n\n[Plan]{{range .entries}}\n  {{.index}}. {{.content}}({{.status}}){{end}}{{end}}"
+usage_update: "\n\n📊 Tokens: {{.inputHuman}} ↘️ · {{.outputHuman}} ↗️ | cache +{{.cacheNewHuman}} new · {{.cacheReadHuman}} hit | {{.usedHuman}}/{{.sizeHuman}} ctx"
+current_mode_update: "\n\n[Mode: {{.currentModeId}}]"
+available_commands_update: "\n\n[Commands updated] {{.commandCount}} available"
+permission_request: "\n\n\n[Permission requested]{{if .hasTitle}} {{.title}}{{end}}{{if .hasInput}}\n\n{{.inputJson}}\n{{end}}{{if .hasOptions}}\n\nOptions:{{range .options}}\n  {{.index}}. {{.name}}{{end}}{{end}}"
+# Deliberately no 'unknown' key: AcpRenderEngine's fallback chain (flattened
+# text, then a raw JSON dump) only kicks in when a kind is NOT a key in this
+# map. Mapping 'unknown' to "" here would silently swallow every malformed
+# notification instead of showing the raw-JSON fallback — the opposite of
+# the "messages are always displayed" guarantee this engine provides.
