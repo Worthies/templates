@@ -1,11 +1,18 @@
 # Built-in ACP session-update rendering templates.
 #
 # Each top-level key is a sessionUpdate discriminator (the 'kind' produced
-# by flattenAcpNotification); each value is a template4d template (a
-# practical subset of Go's text/template syntax) rendered against that
-# notification's flattened view map. Field access uses the leading-dot
-# form (e.g. {{.text}}), and section-conditionals from the old Mustache
-# templates map onto {{if .flag}}...{{end}} / {{range .list}}...{{end}}.
+# by acpNotificationKind); each value is a template4d template rendered
+# against the RAW, unmodified ACP notification object — {{.sessionId}},
+# {{.update.<field>}} for ordinary notifications, or {{.toolCall}}/
+# {{.options}} directly for permission_request (see
+# lib/render/acp_message_view.dart for why nothing is flattened).
+#
+# Formatting a template genuinely cannot do itself (icon lookups, JSON
+# pretty-printing, human-readable token counts, ToolCallContent text
+# extraction) is exposed as a custom function — see
+# lib/render/acp_template_functions.dart for the full list (contentText,
+# toolCallText, toolCallContentJoined, toolIcon, planIcon, diff,
+# rawOutputText, prettyJson, humanTokens, pct, metaTokens, label).
 #
 # This default reproduces the legacy Go FormatACPUpdate text format
 # (agents/session/acp_client.go) so agents without a bespoke template keep
@@ -13,22 +20,99 @@
 # session_info_update have no Go-side legacy formatting (FormatACPUpdate
 # doesn't handle them either), so these use the same bracketed wording
 # convention as the rest of this file.
-agent_message_chunk: "{{.text}}"
-user_message_chunk: "[User] {{.text}}"
-agent_thought_chunk: "\n>{{.text}}"
-tool_call: "\n\n[Tool: **{{.title}}**]\n{{if .hasContentText}}\n\n{{.contentText}}\n{{else if .hasInput}}\n\n{{.inputJson}}\n{{end}}"
-tool_call_update: "{{.contentText}}"
-plan: "{{if .hasEntries}}\n\n[Plan]{{range .entries}}\n  {{.index}}. {{.content}}({{.status}}){{end}}{{end}}"
-plan_update: "{{if .hasEntries}}\n\n[Plan updated]{{range .entries}}\n  {{.index}}. {{.content}}({{.status}}){{end}}{{end}}{{if .hasMarkdown}}\n\n[Plan]\n\n{{.markdown}}{{end}}{{if .hasUri}}\n\n[Plan] {{.uri}}{{end}}"
-plan_removed: "{{if .hasPlanId}}\n[Plan removed] {{.planId}}{{end}}"
-available_commands_update: "\n\n[Commands updated] {{.commandCount}} available"
-config_option_update: "{{if .hasConfigOptions}}\n[Config updated]{{range .configOptions}}\n  {{.name}} = {{.value}}{{if .hasDescription}} ({{.description}}){{end}}{{end}}{{end}}"
-session_info_update: "{{if .hasTitle}}\n[Session] {{.title}}{{end}}{{if .hasUpdatedAt}}\n[Updated] {{.updatedAt}}{{end}}"
-usage_update: "\n\n📊 Tokens: {{.inputHuman}} ↘️ · {{.outputHuman}} ↗️ | cache +{{.cacheNewHuman}} new · {{.cacheReadHuman}} hit | {{.usedHuman}}/{{.sizeHuman}} ctx"
-current_mode_update: "\n\n[Mode: {{.currentModeId}}]"
-permission_request: "\n\n\n[Permission requested]{{if .hasTitle}} {{.title}}{{end}}{{if .hasInput}}\n\n{{.inputJson}}\n{{end}}{{if .hasOptions}}\n\nOptions:{{range .options}}\n  {{.index}}. {{.name}}{{end}}{{end}}"
-# Deliberately no 'unknown' key: AcpRenderEngine's fallback chain (flattened
-# text, then a raw JSON dump) only kicks in when a kind is NOT a key in this
-# map. Mapping 'unknown' to "" here would silently swallow every malformed
-# notification instead of showing the raw-JSON fallback — the opposite of
-# the "messages are always displayed" guarantee this engine provides.
+#
+# NOTE on the literal block scalars (|-) below: unlike Mustache, template4d
+# does not strip any newline for you — a blank line in the source is a
+# blank line in the output. Every leading blank line you see below is
+# intentional (it reproduces a leading "\n" that used to be spelled out in
+# a quoted string); where {{end}} needs to NOT emit a preceding newline, it
+# sits directly after the previous tag on the same line rather than on its
+# own.
+agent_message_chunk: "{{contentText .update.content}}"
+
+user_message_chunk: "[User] {{contentText .update.content}}"
+
+agent_thought_chunk: |-
+
+  >{{contentText .update.content}}
+
+tool_call: |-
+  {{$content := toolCallContentJoined .update.content}}
+
+  [Tool: **{{.update.title}}**]
+  {{if $content}}
+
+  {{$content}}
+  {{else if .update.rawInput}}
+
+  {{prettyJson .update.rawInput}}
+  {{end}}
+
+tool_call_update: "{{if .update.content}}{{toolCallContentJoined .update.content}}{{else}}{{rawOutputText .update.rawOutput}}{{end}}"
+
+plan: |-
+  {{if .update.entries}}
+
+  [Plan]{{range $i, $e := .update.entries}}
+    {{add $i 1}}. {{$e.content}}({{$e.status}}){{end}}{{end}}
+
+plan_update: |-
+  {{if .update.plan.entries}}
+
+  [Plan updated]{{range $i, $e := .update.plan.entries}}
+    {{add $i 1}}. {{$e.content}}({{$e.status}}){{end}}{{end -}}
+  {{if .update.plan.content}}
+
+  [Plan]
+
+  {{.update.plan.content}}{{end -}}
+  {{if .update.plan.uri}}
+
+  [Plan] {{.update.plan.uri}}{{end}}
+
+plan_removed: |-
+  {{if .update.id}}
+  [Plan removed] {{.update.id}}{{end}}
+
+available_commands_update: |-
+
+
+  [Commands updated] {{len .update.availableCommands}} available
+
+config_option_update: |-
+  {{if .update.configOptions}}
+  [Config updated]{{range .update.configOptions}}
+    {{.name}} = {{.currentValue}}{{if .description}} ({{.description}}){{end}}{{end}}{{end}}
+
+session_info_update: |-
+  {{if .update.title}}
+  [Session] {{.update.title}}{{end}}{{if .update.updatedAt}}
+  [Updated] {{.update.updatedAt}}{{end}}
+
+usage_update: |-
+
+
+  📊 Tokens: {{metaTokens .update._meta "input"}} ↘️ · {{metaTokens .update._meta "output"}} ↗️ | cache +{{metaTokens .update._meta "cacheNew"}} new · {{metaTokens .update._meta "cacheRead"}} hit | {{humanTokens .update.used}}/{{humanTokens .update.size}} ctx
+
+current_mode_update: |-
+
+
+  [Mode: {{.update.currentModeId}}]
+
+permission_request: |-
+
+
+
+  [Permission requested]{{if .toolCall.title}} {{.toolCall.title}}{{end}}{{if .toolCall.rawInput}}
+
+  {{prettyJson .toolCall.rawInput}}
+  {{end}}{{if .options}}
+
+  Options:{{range $i, $o := .options}}
+    {{add $i 1}}. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}
+# Deliberately no 'unknown' key: AcpRenderEngine's fallback chain
+# (extractable text, then a raw JSON dump) only kicks in when a kind is NOT
+# a key in this map. Mapping 'unknown' to "" here would silently swallow
+# every malformed notification instead of showing the raw-JSON fallback —
+# the opposite of the "messages are always displayed" guarantee this
+# engine provides.

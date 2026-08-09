@@ -1,11 +1,10 @@
 # Built-in ACP session-update rendering templates.
 #
 # Each top-level key is a sessionUpdate discriminator (the 'kind' produced
-# by flattenAcpNotification); each value is a template4d template (a
-# practical subset of Go's text/template syntax) rendered against that
-# notification's flattened view map. Field access uses the leading-dot
-# form (e.g. {{.text}}), and section-conditionals from the old Mustache
-# templates map onto {{if .flag}}...{{end}} / {{range .list}}...{{end}}.
+# by acpNotificationKind); each value is a template4d template rendered
+# against the RAW, unmodified ACP notification object — see default.yaml's
+# header comment for the field/function reference this and every other
+# built-in file shares.
 #
 # Mirrors drift's own native terminal chat renderer
 # (drift/crates/drift/src/chat_render.rs): the same icon/wording
@@ -13,130 +12,102 @@
 # Markdown instead of ANSI color codes. Tool calls additionally carry a
 # kind icon (📖 read, ✏️ edit, ⚡ execute, …) so the message stream reads
 # like drift's own progress display.
-agent_message_chunk: |
-  {{.text}}
+agent_message_chunk: "{{contentText .update.content}}"
 
-user_message_chunk: |+
-  [User] {{.text}}
+user_message_chunk: "[User] {{contentText .update.content}}"
 
-agent_thought_chunk: |+
-  {{- if .hasText -}}
-  
-  💭 *thinking: {{.text}}*
-  {{- end -}}
+agent_thought_chunk: |-
+  {{if contentText .update.content}}
 
-tool_call: |+
-  
-  {{.kindIcon}} running **{{.title}}**
+  💭 *thinking: {{contentText .update.content}}*{{end}}
 
-  {{ if .hasContentText }}
-  {{.contentText}}
-  {{ else if .hasInput }}
+tool_call: |-
+  {{$content := toolCallContentJoined .update.content}}
+
+  {{toolIcon .update.kind}} running **{{.update.title}}**
+  {{if $content}}
+  {{$content}}
+  {{else if .update.rawInput -}}
   ```json
-  {{.inputJson}}
+  {{prettyJson .update.rawInput}}
   ```
-  {{ end }}
+  {{end}}
 
-tool_call_update: |+
-  {{- if .completed -}}
-  ✅ {{.label}}{{end}}{{if .failed}}❌ {{.label}}
-  {{- end -}}
-  {{- if .inProgress -}}
-  ⏳ {{.label}} (in progress)
-  {{- end -}}
+tool_call_update: |-
+  {{$content := toolCallContentJoined .update.content -}}
+  {{$label := label .update.title .update.toolCallId -}}
+  {{switch .update.status}}{{case "completed"}}
 
-plan: |+
-  {{- if .hasEntries -}}
-  
+  ✅ {{$label}}{{case "failed"}}
+
+  ❌ {{$label}}{{default}}
+
+  ⏳ {{$label}} (in progress){{end}}
+
+plan: |-
+  {{if .update.entries}}
+
+  **Plan**{{range $i, $e := .update.entries}}
+    {{planIcon $e.status}} {{add $i 1}}. {{$e.content}}{{if $e.priority}} ({{$e.priority}}){{end}}{{end}}{{end}}
+
+plan_update: |-
+  {{if .update.plan.entries}}
+
+  **Plan updated**{{range $i, $e := .update.plan.entries}}
+    {{planIcon $e.status}} {{add $i 1}}. {{$e.content}}{{end}}{{end -}}
+  {{if .update.plan.content}}
+
   **Plan**
-    {{- range .entries -}}
-    {{.statusIcon}} {{.index}}. {{.content}}{{- if .hasPriority -}} ({{.priority}}){{- end -}}
-    {{- end -}}
-  
-  {{- end -}}
 
-plan_update: |+
-  {{- if .hasEntries -}}
-  
-  **Plan updated**
-    {{range .entries}}
-  
-    {{.statusIcon}} {{.index}}. {{.content}}
-    {{- end -}}
-  {{- end -}}
-  {{- if .hasMarkdown -}}
-  
-  **Plan**
-  
-  {{.markdown}}
-  {{- end -}}
-  {{- if .hasUri -}}
-  
-  📎 Plan: {{.uri}}
-  {{- end -}}
+  {{.update.plan.content}}{{end -}}
+  {{if .update.plan.uri}}
 
-plan_removed: |+
-  {{- if .hasPlanId -}}
-  🗑️ Plan removed ({{.planId}})
-  {{- end -}}
+  📎 Plan: {{.update.plan.uri}}{{end}}
 
-available_commands_update: |+
-  {{- if .hasCommands -}}
-  
-  📋 {{.commandCount}} command(s) available:
-    {{- range .commands -}}
-  - `{{.name}}` {{- if .hasDescription -}} — {{.description}}{{- end -}}
-    {{- end -}}
-  {{- end -}}
+plan_removed: |-
+  {{if .update.id}}
+  🗑️ Plan removed ({{.update.id}}){{end}}
 
-config_option_update: |+
-  {{- if .hasConfigOptions -}}
-  ⚙️ Config options:
-    {{- range .configOptions -}}
-  - `{{.name}}` = {{.value}}{{- if .hasDescription -}} ({{.description}}){{- end -}}
-    {{- end -}}
-  {{- end -}}
+available_commands_update: |-
+  {{if .update.availableCommands}}
 
-session_info_update: |+
-  {{- if .hasTitle -}}
-  🏷️ Session: {{.title}}
-  {{- end -}}
-  {{- if .hasUpdatedAt -}}
-  🕒 updated {{.updatedAt}}
-  {{- end -}}
+  📋 {{len .update.availableCommands}} command(s) available:{{range .update.availableCommands}}
+  - `{{.name}}`{{if .description}} — {{.description}}{{end}}{{end}}{{end}}
 
-usage_update: |+
-  
-  📊 {{.inputHuman}} in · {{.outputHuman}} out | cache +{{.cacheNewHuman}} new · {{.cacheReadHuman}} hit | {{.usedHuman}}/{{.sizeHuman}} ctx{{if .hasPct}} ({{.pct}}%){{end}}
+config_option_update: |-
+  {{if .update.configOptions}}
+  ⚙️ Config options:{{range .update.configOptions}}
+  - `{{.name}}` = {{.currentValue}}{{if .description}} ({{.description}}){{end}}{{end}}{{end}}
 
-current_mode_update: |+
-  
-  🔀 Mode: **{{.currentModeId}}**
+session_info_update: |-
+  {{if .update.title}}
+  🏷️ Session: {{.update.title}}{{end}}{{if .update.updatedAt}}
+  🕒 updated {{.update.updatedAt}}{{end}}
 
-permission_request: |+
-  
-  
-  🔐 **Permission requested**
-  {{- if .hasTitle -}}
-  : {{.kindIcon}} {{.title}}
+usage_update: |-
 
-  {{- end -}}
-  {{ if .hasInput }}
 
+  📊 {{metaTokens .update._meta "input"}} in · {{metaTokens .update._meta "output"}} out | cache +{{metaTokens .update._meta "cacheNew"}} new · {{metaTokens .update._meta "cacheRead"}} hit | {{humanTokens .update.used}}/{{humanTokens .update.size}} ctx{{if .update.size}} ({{pct .update.used .update.size}}%){{end}}
+
+current_mode_update: |-
+
+
+  🔀 Mode: **{{.update.currentModeId}}**
+
+permission_request: |-
+
+
+
+  🔐 **Permission requested**{{if .toolCall.title}}: {{toolIcon .toolCall.kind}} {{.toolCall.title}}{{end}}{{if .toolCall.rawInput}}
   ```json
-  {{.inputJson}}
+  {{prettyJson .toolCall.rawInput}}
   ```
+  {{end}}{{if .options}}
 
-  {{ end }}
-  {{ if .hasOptions }}
-
-  Options:
-    {{ range .options }} **{{.index}}**. {{.name}}{{ end }}
-  
-  {{ end }}
-
-# Deliberately no 'unknown' key: AcpRenderEngine's fallback chain (flattened
-# text, then a raw JSON dump) only kicks in when a kind is NOT a key in this
-# map. Mapping 'unknown' to "" here would silently swallow every malformed
-# notification instead of showing the raw-JSON fallback — the opposite of
-# the "messages are always displayed" guarantee this engine provides.
+  Options:{{range $i, $o := .options}} **{{add $i 1}}**. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}
+# Deliberately no 'unknown' key: AcpRenderEngine's fallback chain
+# (extractable text, then a raw JSON dump) only kicks in when a kind is NOT
+# a key in this map. Mapping 'unknown' to "" here would silently swallow
+# every malformed notification instead of showing the raw-JSON fallback —
+# the opposite of the "messages are always displayed" guarantee this
+# engine provides.
