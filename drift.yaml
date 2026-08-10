@@ -18,50 +18,92 @@ user_message_chunk: "[User] {{contentText .update.content}}"
 
 agent_thought_chunk: |-
   {{if contentText .update.content}}
-
+  
   💭 *thinking: {{contentText .update.content}}*{{end}}
 
 tool_call: |-
   {{$content := toolCallContentJoined .update.content}}
-
+  
   {{toolIcon .update.kind}} running **{{.update.title}}**
   {{if $content}}
   {{$content}}
   {{else if .update.rawInput -}}
+  {{switch .update.title -}}
+  {{case "shell_exec" -}}
+  ```bash
+  {{.update.rawInput.command}}
+  ```
+  {{case "script_exec" -}}
+  ```drift
+  {{.update.rawInput.source}}
+  ```
+  {{case "file_grep" -}}
+  **{{.update.rawInput.path}}**: `{{.update.rawInput.pattern}}`
+  {{case "file_glob" -}}
+  => `{{.update.rawInput.pattern}}`
+  {{case "file_read" -}}
+  **{{.update.rawInput.path}}**: L{{.update.rawInput.start_line}}-{{.update.rawInput.end_line}}
+  {{case "file_edit" -}}
+  `{{.update.rawInput.path}}`
+  
+  ```
+  {{diff .update.rawInput.old_string .update.rawInput.new_string}}
+  ```
+  {{case "file_write" -}}
+  **Writing:** {{.update.rawInput.path}}
+  
+  ```
+  {{.update.rawInput.content}}
+  ```
+  {{case "contexts__execute_tool" -}}
+  
+  **Executing:** {{.update.rawInput.server}} :: {{.update.rawInput.tool}}
+  
+  ```
+  {{.update.rawInput.args}}
+  ```
+  {{case "ask_user" -}}
+  **Question:** {{.update.rawInput.question}}
+  
+  **Options:**{{range $i, $e := .update.rawInput.options}}
+  
+  - {{add $i 1}}. {{$e}}{{end}}
+  {{default-}}
   ```json
   {{prettyJson .update.rawInput}}
   ```
+  {{end -}}
   {{end}}
 
 tool_call_update: |-
   {{$content := toolCallContentJoined .update.content -}}
   {{$label := label .update.title .update.toolCallId -}}
   {{switch .update.status}}{{case "completed"}}
-
+  
   ✅ {{$label}}{{case "failed"}}
-
+  
   ❌ {{$label}}{{default}}
-
+  
   ⏳ {{$label}} (in progress){{end}}
 
 plan: |-
   {{if .update.entries}}
-
+  
   **Plan**{{range $i, $e := .update.entries}}
     {{planIcon $e.status}} {{add $i 1}}. {{$e.content}}{{if $e.priority}} ({{$e.priority}}){{end}}{{end}}{{end}}
 
 plan_update: |-
   {{if .update.plan.entries}}
-
+  
   **Plan updated**{{range $i, $e := .update.plan.entries}}
     {{planIcon $e.status}} {{add $i 1}}. {{$e.content}}{{end}}{{end -}}
   {{if .update.plan.content}}
-
+  
   **Plan**
-
+  
   {{.update.plan.content}}{{end -}}
   {{if .update.plan.uri}}
-
+  
   📎 Plan: {{.update.plan.uri}}{{end}}
 
 plan_removed: |-
@@ -70,7 +112,7 @@ plan_removed: |-
 
 available_commands_update: |-
   {{if .update.availableCommands}}
-
+  
   📋 {{len .update.availableCommands}} command(s) available:{{range .update.availableCommands}}
   - `{{.name}}`{{if .description}} — {{.description}}{{end}}{{end}}{{end}}
 
@@ -85,22 +127,20 @@ session_info_update: |-
   🕒 updated {{.update.updatedAt}}{{end}}
 
 usage_update: |-
-
-
+  
+  
   📊 {{metaTokens .update._meta "input"}} in · {{metaTokens .update._meta "output"}} out | cache +{{metaTokens .update._meta "cacheNew"}} new · {{metaTokens .update._meta "cacheRead"}} hit | {{humanTokens .update.used}}/{{humanTokens .update.size}} ctx{{if .update.size}} ({{pct .update.used .update.size}}%){{end}}
 
 current_mode_update: |-
-
-
+  
   🔀 Mode: **{{.update.currentModeId}}**
 
 permission_request: |-
-
-
-
-  🔐 **Permission requested**{{if .toolCall.title}}: {{toolIcon .toolCall.kind}} {{.toolCall.title}}{{end}}{{if .options}}
-
-  Options:{{range $i, $o := .options}} **{{add $i 1}}**. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}
+  
+  
+  🔐 **Permission requested**{{if .toolCall.title}}: {{toolIcon .toolCall.kind}} {{.toolCall.title}}{{end}}{{if ne .toolCall.title "ask_user"}}{{if .options}}
+  
+  Options:{{range $i, $o := .options}} **{{add $i 1}}**. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}{{end}}
 # Deliberately no 'unknown' key: AcpRenderEngine's fallback chain
 # (extractable text, then a raw JSON dump) only kicks in when a kind is NOT
 # a key in this map. Mapping 'unknown' to "" here would silently swallow
