@@ -37,24 +37,21 @@ tool_call: |-
   ```drift
   {{.update.rawInput.source}}
   ```
-  {{case "file_grep" -}}
-  **{{.update.rawInput.path}}**: `{{.update.rawInput.pattern}}`
-  {{case "file_glob" -}}
-  => `{{.update.rawInput.pattern}}`
-  {{case "file_read" -}}
-  **{{.update.rawInput.path}}**: L{{.update.rawInput.start_line}}-{{.update.rawInput.end_line}}
-  {{case "file_edit" -}}
-  `{{.update.rawInput.path}}`
+  {{case "file_grep" -}} **{{.update.rawInput.path}}**: `{{.update.rawInput.pattern}}`
+  {{case "file_glob" -}} => `{{.update.rawInput.pattern}}`
+  {{case "file_read" -}} **{{.update.rawInput.path}}**: L{{.update.rawInput.start_line}}-{{.update.rawInput.end_line}}
+  {{case "file_edit" -}} `{{.update.rawInput.path}}`
   
   ```
   {{diff .update.rawInput.old_string .update.rawInput.new_string}}
   ```
-  {{case "file_write" -}}
-  **Writing:** {{.update.rawInput.path}}
+  {{case "file_write" -}} **Writing:** {{.update.rawInput.path}}
   
   ```
   {{.update.rawInput.content}}
   ```
+  {{case "web_fetch" -}} **{{.update.rawInput.url}}**
+  {{case "directory_list" -}} **{{.update.rawInput.path}}**
   {{case "contexts__execute_tool" -}}
   
   **Executing:** {{.update.rawInput.server}} :: {{.update.rawInput.tool}}
