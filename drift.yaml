@@ -52,6 +52,11 @@ tool_call: |-
   ```
   {{case "web_fetch" -}} **{{.update.rawInput.url}}**
   {{case "directory_list" -}} **{{.update.rawInput.path}}**
+  {{case "memory_add" }} **{{.update.rawInput.scope}}**
+
+  ```
+  {{.update.rawInput.content}}
+  ```
   {{case "contexts__execute_tool" -}}
   
   **Executing:** {{.update.rawInput.server}} :: {{.update.rawInput.tool}}
