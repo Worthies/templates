@@ -62,7 +62,7 @@ tool_call: |-
   **Executing:** {{.update.rawInput.server}} :: {{.update.rawInput.tool}}
   
   ```
-  {{.update.rawInput.args}}
+  {{prettyJson .update.rawInput.args}}
   ```
   {{case "ask_user" -}}
   **Question:** {{.update.rawInput.question}}
