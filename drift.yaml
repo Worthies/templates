@@ -98,11 +98,7 @@ permission_request: |-
 
 
 
-  🔐 **Permission requested**{{if .toolCall.title}}: {{toolIcon .toolCall.kind}} {{.toolCall.title}}{{end}}{{if .toolCall.rawInput}}
-  ```json
-  {{prettyJson .toolCall.rawInput}}
-  ```
-  {{end}}{{if .options}}
+  🔐 **Permission requested**{{if .toolCall.title}}: {{toolIcon .toolCall.kind}} {{.toolCall.title}}{{end}}{{if .options}}
 
   Options:{{range $i, $o := .options}} **{{add $i 1}}**. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}
 # Deliberately no 'unknown' key: AcpRenderEngine's fallback chain
