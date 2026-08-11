@@ -23,11 +23,10 @@ agent_thought_chunk: |-
 
 tool_call: |-
   {{$content := toolCallContentJoined .update.content}}
-  
-  {{toolIcon .update.kind}} running **{{.update.title}}**
   {{if $content}}
+  {{toolIcon .update.kind}} running **{{.update.title}}**
   {{$content}}
-  {{else if .update.rawInput -}}
+  {{else if .update.rawInput_DISABLE -}}
   {{switch .update.title -}}
   {{case "shell_exec" -}}
   ```bash
@@ -49,9 +48,24 @@ tool_call: |-
   
   ```
   {{.update.rawInput.content}}
+
+  {{prettyJson .update.rawInput}}
   ```
   {{case "web_fetch" -}} **{{.update.rawInput.url}}**
   {{case "directory_list" -}} **{{.update.rawInput.path}}**
+  {{case "file_exists" -}} **{{.update.rawInput.path}}**
+  {{case "plan"}}
+    {{switch .update.rawInput.op -}}
+      {{case "add"}} **⚪️** {{.update.rawInput.content}}
+      {{case "update" -}}
+        {{switch .update.rawInput.status -}}
+          {{case "in_progress"}} **🛠️** {{.update.rawInput.id}} {{.update.rawInput.status}}
+          {{default}} **🛠️** {{.update.rawInput.id}} {{.update.rawInput.status}}
+        {{end -}}
+      {{case "close"}} **🟢** **{{.update.rawInput.id}}** {{.update.rawInput.status}}
+      {{case "list"}} **🗓️**
+      {{default}} **⚪️** {{.update.rawInput.op}} {{.update.rawInput.content}}
+    {{end -}}
   {{case "memory_add" }} **{{.update.rawInput.scope}}**
 
   ```
@@ -60,16 +74,30 @@ tool_call: |-
   {{case "contexts__execute_tool" -}}
   
   **Executing:** {{.update.rawInput.server}} :: {{.update.rawInput.tool}}
+    {{switch .update.rawInput.tool-}}
+      {{case "subagentdone"-}}
+  **{{.update.rawInput.process_id}}** -> **{{.update.rawInput.status}}**
+
+  {{.update.rawInput.result}}
+  
+      {{default -}}
   
   ```
   {{prettyJson .update.rawInput.args}}
   ```
+    {{end -}}
   {{case "ask_user" -}}
   **Question:** {{.update.rawInput.question}}
   
   **Options:**{{range $i, $e := .update.rawInput.options}}
   
   - {{add $i 1}}. {{$e}}{{end}}
+  {{case "schedule_wakeup" -}} **{{.update.rawInput.delay_seconds}}** `{{.update.rawInput.reason}}`
+
+  ```
+  {{.update.rawInput.prompt}}
+  ```
+
   {{default-}}
   ```json
   {{prettyJson .update.rawInput}}
@@ -141,8 +169,94 @@ permission_request: |-
   
   
   🔐 **Permission requested**{{if .toolCall.title}}: {{toolIcon .toolCall.kind}} {{.toolCall.title}}{{end}}{{if ne .toolCall.title "ask_user"}}{{if .options}}
+
+  {{if .toolCall._meta.toolName -}}
+  {{switch .toolCall._meta.toolName -}}
+  {{case "shell_exec" -}}
+  ```bash
+  {{.toolCall.rawInput.command}}
+  ```
+  {{case "script_exec" -}}
+  ```drift
+  {{.toolCall.rawInput.source}}
+  ```
+  {{case "file_grep" -}} **{{.toolCall.rawInput.path}}**: `{{.toolCall.rawInput.pattern}}`
+  {{case "file_glob" -}} => `{{.toolCall.rawInput.pattern}}`
+  {{case "file_read" -}} **{{.toolCall.rawInput.path}}**: L{{.toolCall.rawInput.start_line}}-{{.toolCall.rawInput.end_line}}
+  {{case "file_edit" -}} `{{.toolCall.rawInput.path}}`
   
-  Options:{{range $i, $o := .options}} **{{add $i 1}}**. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}{{end}}
+  ```
+  {{diff .toolCall.rawInput.old_string .toolCall.rawInput.new_string}}
+  ```
+  {{case "file_write" -}} **Writing:** {{.toolCall.rawInput.path}}
+  
+  ```
+  {{.toolCall.rawInput.content}}
+
+  {{prettyJson .toolCall}}
+  ```
+  {{case "web_fetch" -}} **{{.toolCall.rawInput.url}}**
+  {{case "directory_list" -}} **{{.toolCall.rawInput.path}}**
+  {{case "file_exists" -}} **{{.toolCall.rawInput.path}}**
+  {{case "plan"}}
+    {{switch .toolCall.rawInput.op -}}
+      {{case "add"}} **⚪️** {{.toolCall.rawInput.content}}
+      {{case "update" -}}
+        {{switch .toolCall.rawInput.status -}}
+          {{case "in_progress"}} **🛠️** {{.toolCall.rawInput.id}} {{.toolCall.rawInput.status}}
+          {{default}} **🛠️** {{.toolCall.rawInput.id}} {{.toolCall.rawInput.status}}
+        {{end -}}
+      {{case "close"}} **🟢** **{{.toolCall.rawInput.id}}** {{.toolCall.rawInput.status}}
+      {{case "list"}} **🗓️**
+      {{default}} **⚪️** {{.toolCall.rawInput.op}} {{.toolCall.rawInput.content}}
+    {{end -}}
+  {{case "memory_add" }} **{{.toolCall.rawInput.scope}}**
+
+  ```
+  {{.toolCall.rawInput.content}}
+  ```
+  {{case "contexts__execute_tool" -}}
+  
+  **Executing:** {{.toolCall.rawInput.server}} :: {{.toolCall.rawInput.tool}}
+    {{switch .toolCall.rawInput.tool -}}
+      {{case "subagentdone" -}}
+  **{{.toolCall.rawInput.process_id}}** -> **{{.toolCall.rawInput.status}}**
+
+  {{.toolCall.rawInput.result}}
+  
+      {{default -}}
+  
+  ```
+  {{prettyJson .toolCall.rawInput.args}}
+  ```
+    {{end -}}
+  {{case "ask_user"}}
+  
+  **Options:**{{range $i, $e := .options}}
+  
+  - {{add $i 1}}. {{$e.name}}({{$e.kind}}) {{end}}
+  {{case "schedule_wakeup" -}} **{{.toolCall.rawInput.delay_seconds}}** `{{.toolCall.rawInput.reason}}`
+
+  ```
+  {{.toolCall.rawInput.prompt}}
+  ```
+
+  {{default-}}
+  ```json
+  {{prettyJson .toolCall}}
+  ```
+  {{end -}}
+  {{else }}
+    
+  ```
+  {{prettyJson .}}
+  ```
+  {{end}}
+  {{if ne "ask_user" .toolCall._meta.toolName -}}
+  
+  Options:{{range $i, $o := .options}} **{{add $i 1}}**. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}
+  {{end -}}
+
 # Deliberately no 'unknown' key: AcpRenderEngine's fallback chain
 # (extractable text, then a raw JSON dump) only kicks in when a kind is NOT
 # a key in this map. Mapping 'unknown' to "" here would silently swallow
