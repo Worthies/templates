@@ -108,13 +108,86 @@ tool_call: |-
 tool_call_update: |-
   {{$content := toolCallContentJoined .update.content -}}
   {{$label := label .update.title .update.toolCallId -}}
-  {{switch .update.status}}{{case "completed"}}
+  {{switch .update.status}}
+  {{case "completed"}}
   
-  ✅ {{$label}}{{case "failed"}}
+  ✅ {{$label}}
+    {{switch .update._meta.toolName -}}
+    {{case "shell_exec" -}} **status:** `{{.update.rawOutput.exit_code}}`
+      {{if .update.rawOutput.stdout}}
+
+  **stdout:**
+  ```
+  {{.update.rawOutput.stdout}}
+  ```
+      {{end -}}
+      {{if .update.rawOutput.stderr}}
   
-  ❌ {{$label}}{{default}}
+  **stderr:**
+  ```
+  {{.update.rawOutput.stderr}}
+  ```
+      {{end -}}
+    {{case "script_exec" -}}
+      {{if .update.rawOutput.stdout}}
   
-  ⏳ {{$label}} (in progress){{end}}
+  ```drift
+  {{.update.rawOutput.stdout}}
+  ```
+      {{end -}}
+      {{if .update.rawOutput.stderr}}
+  
+  **stderr:**
+  ```
+  {{.update.rawOutput.stderr}}
+  ```
+      {{end -}}
+    {{case "file_edit" -}}
+    {{case "file_write" -}}
+    {{case "file_exists" -}} **{{.update.rawOutput.path}}** {{if .update.rawOutput.exists}}✅{{else}}❌{{end}}
+    {{case "file_read" -}}
+  **{{.update.rawOutput.path}}**: L{{.update.rawOutput.start_line}}-{{.update.rawOutput.end_line}} (total: {{.update.rawOutput.total_lines}} lines)
+
+  ```
+  {{.update.rawOutput.content}}
+  ```
+
+    {{case "file_grep" -}} **{{.update.rawOutput.path}}** 🔎 `{{.update.rawOutput.pattern}}`
+
+      {{range $i, $e := .update.rawOutput.files -}}
+  
+  - **{{$e.file}}** **{{$e.count}}** matches:
+        {{range $x, $y := $e.matches -}}
+    {{add $x 1}}. L{{$y.line_number}}: `{{$y.content}}`
+        {{end -}}
+      {{end -}}
+    {{case "ask_user" -}} **{{.update.rawOutput.answer}}**
+  ```
+  {{.update.rawOutput.extra}}
+  ```
+    {{case "plan" -}}
+      {{range $i, $e := .update.rawOutput.plan}}
+  
+  **{{switch $e.status}}{{case "closed"}}✅{{case "in_progress"}}🛠️{{default}}⬜️{{end}}** {{$e.content}} (#{{$e.id}})
+      {{end -}}
+    {{case "web_fetch" -}}
+  
+  {{.update.rawOutput}}
+
+    {{default}}
+
+  ```
+  {{.}}
+  ```
+    {{end -}}
+
+  {{case "failed"}}
+  
+  ❌ {{$label}}
+  {{default}}
+  
+  ⏳ {{$label}} (in progress)
+  {{end}}
 
 plan: |-
   {{if .update.entries}}
@@ -181,8 +254,10 @@ permission_request: |-
   {{.toolCall.rawInput.source}}
   ```
   {{case "file_grep" -}} **{{.toolCall.rawInput.path}}**: `{{.toolCall.rawInput.pattern}}`
-  {{case "file_glob" -}} => `{{.toolCall.rawInput.pattern}}`
+  {{case "file_glob" -}} 🔎 `{{.toolCall.rawInput.pattern}}`
   {{case "file_read" -}} **{{.toolCall.rawInput.path}}**: L{{.toolCall.rawInput.start_line}}-{{.toolCall.rawInput.end_line}}
+  {{case "file_exists" -}} **{{.toolCall.rawInput.path}}**
+  {{case "file_delete" -}} **🗑️ `{{.toolCall.rawInput.path}}`**
   {{case "file_edit" -}} `{{.toolCall.rawInput.path}}`
   
   ```
@@ -192,12 +267,9 @@ permission_request: |-
   
   ```
   {{.toolCall.rawInput.content}}
-
-  {{prettyJson .toolCall}}
   ```
-  {{case "web_fetch" -}} **{{.toolCall.rawInput.url}}**
   {{case "directory_list" -}} **{{.toolCall.rawInput.path}}**
-  {{case "file_exists" -}} **{{.toolCall.rawInput.path}}**
+  {{case "web_fetch" -}} **{{.toolCall.rawInput.url}}**
   {{case "plan"}}
     {{switch .toolCall.rawInput.op -}}
       {{case "add"}} **⚪️** {{.toolCall.rawInput.content}}

@@ -23,12 +23,25 @@ tool_call: |-
   {{$content := toolCallContentJoined .update.content}}
 
   ⏺ **{{.update.title}}**
-  {{if $content -}}
-  {{"  "}}⎿  {{$content}}
-  {{else if .update.rawInput -}}
-  {{"  "}}⎿  ```json
-  {{prettyJson .update.rawInput}}
+  {{if .update.rawInput}}
+    {{switch .update.title -}}
+    {{case "Read"}} `{{.update.rawInput.file_path}}`
+    {{case "Write", "Edit"}}
+    {{case "Bash"}} `{{.update.rawInput.command}}`
+    {{case "Agent"}} {{.update.rawInput.description}} {{if .update.rawInput.run_in_background}}(**Background**){{end}}**
+
   ```
+  {{.update.rawInput.prompt}}
+  ```
+    {{default }}
+
+  ```json
+  {{prettyJson .}}
+  ```
+    {{end -}}
+  {{else if $content}}
+
+  {{"  "}}⎿  {{$content}}
   {{end}}
 
 tool_call_update: |-
@@ -49,10 +62,10 @@ plan: |-
   **Plan**{{range .update.entries}}
     ☐ {{.content}} _({{.status}})_{{end}}{{end}}
 
-usage_update: |-
-
-
+usage_update: |+
+  
   {{metaTokens .update._meta "input"}} tokens in · {{metaTokens .update._meta "output"}} out | cache +{{metaTokens .update._meta "cacheNew"}} new · {{metaTokens .update._meta "cacheRead"}} hit | {{humanTokens .update.used}}/{{humanTokens .update.size}} ctx{{if .update.size}} ({{pct .update.used .update.size}}%){{end}}
+  
 
 current_mode_update: |-
 
@@ -65,16 +78,48 @@ available_commands_update: |-
   {{len .update.availableCommands}} command(s) available
 
 permission_request: |-
-
-
-
-  ⏺ **Permission requested**{{if .toolCall.title}}: {{.toolCall.title}}{{end}}{{if .toolCall.rawInput}}
-    ⎿  ```json
-  {{prettyJson .toolCall.rawInput}}
+  
+  
+  ⏺ **Permission requested**{{if .toolCall.title}}: {{.toolCall.title}}{{end}}
+  {{switch .toolCall.title -}}
+    {{case "Bash"}} `{{.toolCall.rawInput.command}}`
+    {{case "Read"}} `{{.toolCall.rawInput.file_path}}`
+    {{case "Edit" -}}
+      {{if .toolCall.rawInput.path}}`{{.toolCall.rawInput.path}}`
+  
   ```
-  {{end}}{{if .options}}
-    ⎿  Options:{{range $i, $o := .options}}
-         {{add $i 1}}. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}{{end}}{{end}}
+  {{diff .toolCall.rawInput.oldText .toolCall.rawInput.newText}}
+  ```
+  
+      {{end}}
+    {{case "Write"}} `{{.toolCall.rawInput.file_path}}`
+
+  ```
+  {{.toolCall.rawInput.content}}
+  ```
+
+    {{case "Script"}} `{{.toolCall.rawInput.script}}`
+    {{case "AskUserQuestion"}} {{.toolCall.rawInput.question}}
+    {{default -}}
+
+  ```json
+  {{prettyJson .}}
+  ```
+
+  {{end -}}
+  {{if .options}}
+
+  Options:
+    {{switch .toolCall.title -}}
+    {{case "AskUserQuestion"}}
+      {{range $i, $o := .options }}
+    
+    {{add $i 1}}. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}}
+      {{end}}
+    {{default -}}
+    {{range $i, $o := .options -}}{{add $i 1}}. {{if $o.name}}{{$o.name}}{{else}}{{$o.optionId}}{{end}} {{end}}
+    {{end -}}
+  {{end}}
 # Deliberately no 'unknown' key: AcpRenderEngine's fallback chain
 # (extractable text, then a raw JSON dump) only kicks in when a kind is NOT
 # a key in this map. Mapping 'unknown' to "" here would silently swallow
