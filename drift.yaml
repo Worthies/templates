@@ -165,11 +165,7 @@ tool_call_update: |-
   ```
   {{.update.rawOutput.extra}}
   ```
-    {{case "plan" -}}
-      {{range $i, $e := .update.rawOutput.plan}}
-  
-  **{{switch $e.status}}{{case "closed"}}✅{{case "in_progress"}}🛠️{{default}}⬜️{{end}}** {{$e.content}} (#{{$e.id}})
-      {{end -}}
+    {{case "plan" -}}**{{.update.rawOutput.item.content}}** **#{{.update.rawOutput.item.id}}** **{{switch $e.status}}{{case "closed"}}✅{{case "in_progress"}}🛠️{{default}}⬜️{{end}}**
     {{case "web_fetch" -}}
   
   {{.update.rawOutput}}
