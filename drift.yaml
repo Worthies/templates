@@ -111,9 +111,8 @@ tool_call_update: |-
   {{switch .update.status}}
   {{case "completed"}}
   
-  ✅ {{$label}}
     {{switch .update._meta.toolName -}}
-    {{case "shell_exec" -}} **status:** `{{.update.rawOutput.exit_code}}`
+    {{case "shell_exec" -}}✅ {{$label}} **status:** `{{.update.rawOutput.exit_code}}`
       {{if .update.rawOutput.stdout}}
 
   **stdout:**
@@ -128,7 +127,7 @@ tool_call_update: |-
   {{.update.rawOutput.stderr}}
   ```
       {{end -}}
-    {{case "script_exec" -}}
+    {{case "script_exec" -}}✅ {{$label}}
       {{if .update.rawOutput.stdout}}
   
   ```drift
@@ -142,17 +141,17 @@ tool_call_update: |-
   {{.update.rawOutput.stderr}}
   ```
       {{end -}}
-    {{case "file_edit" -}}
-    {{case "file_write" -}}
-    {{case "file_exists" -}} **{{.update.rawOutput.path}}** {{if .update.rawOutput.exists}}✅{{else}}❌{{end}}
-    {{case "file_read" -}}
+    {{case "file_edit" -}}✅ {{$label}}
+    {{case "file_write" -}}✅ {{$label}}
+    {{case "file_exists" -}}✅ {{$label}} **{{.update.rawOutput.path}}** {{if .update.rawOutput.exists}}✅{{else}}❌{{end}}
+    {{case "file_read" -}}✅ {{$label}}
   **{{.update.rawOutput.path}}**: L{{.update.rawOutput.start_line}}-{{.update.rawOutput.end_line}} (total: {{.update.rawOutput.total_lines}} lines)
 
   ```
   {{.update.rawOutput.content}}
   ```
 
-    {{case "file_grep" -}} **{{.update.rawOutput.path}}** 🔎 `{{.update.rawOutput.pattern}}`
+    {{case "file_grep" -}}✅ {{$label}} **{{.update.rawOutput.path}}** 🔎 `{{.update.rawOutput.pattern}}`
 
       {{range $i, $e := .update.rawOutput.files -}}
   
@@ -161,16 +160,16 @@ tool_call_update: |-
     {{add $x 1}}. L{{$y.line_number}}: `{{$y.content}}`
         {{end -}}
       {{end -}}
-    {{case "ask_user" -}} **{{.update.rawOutput.answer}}**
+    {{case "ask_user" -}}✅ {{$label}} **{{.update.rawOutput.answer}}**
   ```
   {{.update.rawOutput.extra}}
   ```
-    {{case "plan" -}}**{{.update.rawOutput.item.content}}** **#{{.update.rawOutput.item.id}}** **{{switch $e.status}}{{case "closed"}}✅{{case "in_progress"}}🛠️{{default}}⬜️{{end}}**
+    {{case "plan" -}}{{switch .update.rawOutput.item.status}}{{case "closed"}}✅{{case "in_progress"}}⏳{{default}}⬜️{{end}} **{{.update.rawOutput.item.content}}** **#{{.update.rawOutput.item.id}}**
     {{case "web_fetch" -}}
   
   {{.update.rawOutput}}
 
-    {{default}}
+    {{default}}✅ {{$label}}
 
   ```
   {{.}}

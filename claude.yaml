@@ -99,7 +99,16 @@ permission_request: |-
   ```
 
     {{case "Script"}} `{{.toolCall.rawInput.script}}`
-    {{case "AskUserQuestion"}} {{.toolCall.rawInput.question}}
+    {{case "AskUserQuestion" -}}
+      {{range $i, $q := .toolCall.rawInput.questions -}}
+    
+  **{{add $i 1}}.** {{$q.question}}
+
+        {{range $j, $o := $q.options -}}
+    {{add $j 1}}. {{$o.label}}. {{$o.description}}
+        {{end -}}
+      {{end}}
+
     {{default -}}
 
   ```json
